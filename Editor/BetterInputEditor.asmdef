@@ -1,0 +1,19 @@
+{
+    "name": "BetterInputEditor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:28a889b274479194c9ad65fbe526581e",
+        "GUID:165140f40706bbb40a64c1e61820d1f4",
+        "GUID:a66d7077614224c4384af6064906e50e",
+        "GUID:75469ad4d38634e559750d17036d5f7c"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
