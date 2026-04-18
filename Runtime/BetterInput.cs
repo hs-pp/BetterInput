@@ -131,35 +131,5 @@ namespace BetterInputSystem.Runtime
         {
             //Debug.LogError($"{LOG_HEADER} {log}");
         }
-
-        // [RemedyCommand]
-        // private static string PrintToScreen_BetterInputs()
-        // {
-        //     BetterInput betterInput = SystemCore.GetKeySystem<BetterInput>();
-        //     BetterInputActions betterInputActions = betterInput.BetterInputActions;
-        //
-        //     PrintToScreenItem item = new PrintToScreenItem();
-        //     item.Title = "BetterInput Action States";
-        //     betterInput.OnAnyInputActionEnabledChanged += () => // does this need to get unbinded when we clear this printtoscreenitem?
-        //     {
-        //         item.RefreshContentTrigger?.Invoke();
-        //     };
-        //     item.GetContentFunc = () =>
-        //     {
-        //         StringBuilder stringBuilder = new();
-        //         stringBuilder.AppendLine($"UI Input Actions: {betterInputActions.UIInputActionMap.UI.enabled}");
-        //         stringBuilder.AppendLine($"Debug Input Actions: {betterInputActions.DebugActionMap.IsEnabled}");
-        //         foreach (BetterActionMap actionMap in betterInputActions.BetterActionMaps)
-        //         {
-        //             stringBuilder.AppendLine($"{actionMap.GetType().Name}: {actionMap.IsEnabled}");
-        //         }
-        //
-        //         return stringBuilder.ToString();
-        //     };
-        //     
-        //     SystemCore.GetKeySystem<Remedy>().AddPrintToScreenItem(item);
-        //     
-        //     return null;
-        // }
     }
 }
