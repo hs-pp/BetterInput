@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DatastoresDX.Runtime;
@@ -25,6 +26,7 @@ namespace BetterInputSystem.Runtime
         public InputSystemUIInputModule InputSystemUIInputModule { get; private set; }
 
         public BetterInputActions BetterInputActions { get; private set; }
+        public ABetterInputActionsController InputActionsController { get; private set; }
         private Action OnAnyInputActionEnabledChanged;
 
         public InputDeviceType CurrentInputDeviceType { get; private set; } = InputDeviceType.KeyboardAndMouse;
@@ -36,7 +38,7 @@ namespace BetterInputSystem.Runtime
             GameObject prefab = Resources.Load<GameObject>(PREFAB_PATH);
             if (prefab == null)
             {
-                LogError($"Failed to load UserInput prefab.");
+                Debug.LogError($"Failed to load UserInput prefab.");
                 return Task.CompletedTask;
             }
             GameObject instance = Instantiate(prefab, transform);
@@ -51,39 +53,48 @@ namespace BetterInputSystem.Runtime
                 return Task.CompletedTask;
             }
 
-            BetterInputActions.Initialize(OnAnyActionTriggered);
-            BetterInputActions.OnAnyInputActionEnabledChanged += () => { OnAnyInputActionEnabledChanged?.Invoke(); };
+            InputActionsController = CreateBetterInputActionsController();
+            InputActionsController.Initialize(BetterInputActions, OnAnyActionTriggered, () => { OnAnyInputActionEnabledChanged?.Invoke(); });
+
+            BetterInputActions.Initialize(OnAnyActionTriggered); // TODO: REMOVE THIS
             
             InputSystemUIInputModule.actionsAsset = BetterInputActions.UIInputActionMap.asset;
             return Task.CompletedTask;
+        }
+
+        private ABetterInputActionsController CreateBetterInputActionsController()
+        {
+            List<Type> types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes())
+                .Where(type => type.IsSubclassOf(typeof(ABetterInputActionsController)) && !type.IsAbstract).ToList();
+            if (types.Count == 0)
+            {
+                Debug.LogError("Could not find BetterInputActionsController implementation! Make sure to click the Generate Code button!");
+                return null;
+            }
+
+            return (ABetterInputActionsController)Activator.CreateInstance(types[0]);
         }
 
         public void EnableUIInputActions()
         {
             BetterInputActions.UIActions.Enable();
             AllowInputActionsToBeEnabled(false);
-            Log("Enabled UI Action Map.");
         }
 
         public void EnableGameInputActions()
         {
             BetterInputActions.UIActions.Disable();
             AllowInputActionsToBeEnabled(true);
-            Log("Enabled Game Action Maps.");
         }
 
         public void EnableActionMap(Uid actionMapId, bool enable)
         {
-            BetterActionMap actionMap = BetterInputActions.BetterActionMaps.Find(x => x.ElementId.Equals(actionMapId));
-            actionMap.Enable(enable);
+            InputActionsController.EnableActionMap(actionMapId, enable);
         }
         
         private void AllowInputActionsToBeEnabled(bool isAllowed)
         {
-            foreach (BetterActionMap actionMap in BetterInputActions.BetterActionMaps)
-            {
-                actionMap.IsAllowedToBeEnabled = isAllowed;
-            }
+            InputActionsController.AllowInputActionsToBeEnabled(isAllowed);
         }
 
         private void OnAnyActionTriggered(InputAction.CallbackContext context)
@@ -92,7 +103,8 @@ namespace BetterInputSystem.Runtime
             {
                 return;
             }
-            Log($"{context.control.device.name}::{context.action.name}");
+            
+            Debug.Log($"{context.control.device.name}::{context.action.name}");
             
             InputDeviceType type = GetDeviceType(context.control.device);
             if (type != CurrentInputDeviceType)
@@ -114,22 +126,6 @@ namespace BetterInputSystem.Runtime
                 default:
                     return InputDeviceType.Unknown;
             }
-        }
-
-        private const string LOG_HEADER = "[BetterInput]";
-        internal static void Log(string log)
-        {
-            //Debug.Log($"{LOG_HEADER} {log}");
-        }
-
-        internal static void LogWarning(string log)
-        {
-            //Debug.LogWarning($"{LOG_HEADER} {log}");
-        }
-
-        internal static void LogError(string log)
-        {
-            //Debug.LogError($"{LOG_HEADER} {log}");
         }
     }
 }

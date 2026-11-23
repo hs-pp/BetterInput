@@ -73,20 +73,10 @@ using UnityEngine.InputSystem;
             
 namespace BetterInputSystem.Runtime
 {{
-    public partial class BetterInputActions
+    public class BetterInputActionsController2 : ABetterInputActionsController
     {{
-        public List<BetterActionMap> BetterActionMaps {{ get; }} = new();
-        public Action OnAnyInputActionEnabledChanged;
-");
-            foreach (TopLevelActionMapData topLevelActionMapData in topLevelActionMaps)
-            {
-                stringBuilder.AppendLine($"        public {topLevelActionMapData.DisplayName} {topLevelActionMapData.DisplayName} {{ get; private set; }}");
-            }
-            if (topLevelActionMaps.Count > 0)
-            {
-                stringBuilder.AppendLine();
-            }
-            
+        public DebugActionMap DebugActionMap {{ get; private set; }}");
+
             foreach (BetterInputActionMapData actionMapData in betterActionMaps)
             {
                 stringBuilder.AppendLine($"        public {actionMapData.DisplayName}Map {actionMapData.DisplayName}Map {{ get; private set; }}");
@@ -96,38 +86,34 @@ namespace BetterInputSystem.Runtime
                 stringBuilder.AppendLine();
             }
             
-            stringBuilder.AppendLine($@"        private void GeneratedInitialize()
+            stringBuilder.AppendLine($@"        public override void Initialize(BetterInputActions betterInputActions, Action<InputAction.CallbackContext> onAnyActionTriggered, Action onAnyInputActionEnabledChanged)
         {{
+            // Debug Action Map
+            DebugActionMap = new DebugActionMap(betterInputActions.DebugInputActions);
+            DebugActionMap.Enable(true);
+            DebugActionMap.OnEnableChanged += () => {{ onAnyInputActionEnabledChanged?.Invoke(); }};
+
+            // Cache data by name
             Dictionary<string, BetterInputActionsData> actionsData = new();
-            foreach (DataCollectionElement element in GetAllElements())
+            foreach (DataCollectionElement element in betterInputActions.GetAllElements())
             {{
                 BetterInputActionsData actionMap = element as BetterInputActionsData;
                 actionsData.Add(actionMap.DisplayName.Replace("" "", """"), actionMap);
             }}
 ");
             
-            foreach (TopLevelActionMapData topLevelActionMapData in topLevelActionMaps)
-            {
-                stringBuilder.AppendLine($@"            {topLevelActionMapData.DisplayName} = new {topLevelActionMapData.DisplayName}({topLevelActionMapData.FieldName});
-            {topLevelActionMapData.DisplayName}.Enable(true);
-            {topLevelActionMapData.DisplayName}.OnEnableChanged += () => {{ OnAnyInputActionEnabledChanged?.Invoke(); }};");
-            }
-            if (topLevelActionMaps.Count > 0)
-            {
-                stringBuilder.AppendLine();
-            }
-            
             foreach (BetterInputActionMapData actionMapData in betterActionMaps)
             {
                 stringBuilder.AppendLine($"            {actionMapData.DisplayName}Map = new {actionMapData.DisplayName}Map(actionsData[\"{actionMapData.DisplayName}\"]);");
-                stringBuilder.AppendLine($"            BetterActionMaps.Add({actionMapData.DisplayName}Map);");
+                stringBuilder.AppendLine($"            m_betterActionMaps.Add({actionMapData.DisplayName}Map);");
             }
             
             stringBuilder.AppendLine($@"
-            foreach (BetterActionMap betterActionMap in BetterActionMaps)
+            foreach (BetterActionMap betterActionMap in m_betterActionMaps)
             {{
                 betterActionMap.Enable(false);
-                betterActionMap.OnEnableChanged += () => {{ OnAnyInputActionEnabledChanged?.Invoke(); }};
+                betterActionMap.OnEnableChanged += () => {{ onAnyInputActionEnabledChanged?.Invoke(); }};
+                betterActionMap.ActionMap.actionTriggered += context => {{ onAnyActionTriggered?.Invoke(context); }};
             }}
         }}
     }}");
@@ -213,6 +199,13 @@ namespace BetterInputSystem.Runtime
 
             return stringBuilder.ToString();
         }
+
+        private static BetterInputActionMapData GetDebugMapData()
+        {
+            List<string> debugActionNames = new();
+            
+            return new("DebugActionMap", new());
+        }
         
         private class TopLevelActionMapData
         {
@@ -257,6 +250,12 @@ namespace BetterInputSystem.Runtime
         {
             public string DisplayName { get; }
             public List<string> ActionNames { get; }
+
+            public BetterInputActionMapData(string displayName, List<string> actionNames)
+            {
+                DisplayName = displayName;
+                ActionNames = actionNames;
+            }
 
             public BetterInputActionMapData(BetterInputActionsData actionsData)
             {

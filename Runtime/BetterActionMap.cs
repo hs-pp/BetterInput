@@ -12,7 +12,7 @@ namespace BetterInputSystem.Runtime
         
         private bool m_isEnabled = false;
         private bool m_isAllowedToBeEnabled = true;
-        
+ 
         public bool IsEnabled => ActionMap.enabled;
         public bool IsAllowedToBeEnabled
         {
@@ -26,7 +26,7 @@ namespace BetterInputSystem.Runtime
 
         public void Enable(bool enabled)
         {
-            bool wasEnabled = ActionMap.enabled;
+            bool wasEnabled = IsEnabled;
             
             m_isEnabled = enabled;
             if (m_isAllowedToBeEnabled && m_isEnabled)
@@ -38,7 +38,7 @@ namespace BetterInputSystem.Runtime
                 ActionMap.Disable();   
             }
 
-            if (wasEnabled != ActionMap.enabled)
+            if (wasEnabled != IsEnabled)
             {
                 OnEnableChanged?.Invoke();
             }

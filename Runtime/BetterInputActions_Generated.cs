@@ -10,52 +10,51 @@ using UnityEngine.InputSystem;
             
 namespace BetterInputSystem.Runtime
 {
-    public partial class BetterInputActions
+    public class BetterInputActionsController2 : ABetterInputActionsController
     {
-        public List<BetterActionMap> BetterActionMaps { get; } = new();
-        public Action OnAnyInputActionEnabledChanged;
-
         public DebugActionMap DebugActionMap { get; private set; }
+        public abcMap abcMap { get; private set; }
 
-        public Map Map { get; private set; }
-
-        private void GeneratedInitialize()
+        public override void Initialize(BetterInputActions betterInputActions, Action<InputAction.CallbackContext> onAnyActionTriggered, Action onAnyInputActionEnabledChanged)
         {
+            // Debug Action Map
+            DebugActionMap = new DebugActionMap(betterInputActions.DebugInputActions);
+            DebugActionMap.Enable(true);
+            DebugActionMap.OnEnableChanged += () => { onAnyInputActionEnabledChanged?.Invoke(); };
+
+            // Cache data by name
             Dictionary<string, BetterInputActionsData> actionsData = new();
-            foreach (DataCollectionElement element in GetAllElements())
+            foreach (DataCollectionElement element in betterInputActions.GetAllElements())
             {
                 BetterInputActionsData actionMap = element as BetterInputActionsData;
                 actionsData.Add(actionMap.DisplayName.Replace(" ", ""), actionMap);
             }
 
-            DebugActionMap = new DebugActionMap(m_debugActionMap);
-            DebugActionMap.Enable(true);
-            DebugActionMap.OnEnableChanged += () => { OnAnyInputActionEnabledChanged?.Invoke(); };
+            abcMap = new abcMap(actionsData["abc"]);
+            m_betterActionMaps.Add(abcMap);
 
-            Map = new Map(actionsData[""]);
-            BetterActionMaps.Add(Map);
-
-            foreach (BetterActionMap betterActionMap in BetterActionMaps)
+            foreach (BetterActionMap betterActionMap in m_betterActionMaps)
             {
                 betterActionMap.Enable(false);
-                betterActionMap.OnEnableChanged += () => { OnAnyInputActionEnabledChanged?.Invoke(); };
+                betterActionMap.OnEnableChanged += () => { onAnyInputActionEnabledChanged?.Invoke(); };
+                betterActionMap.ActionMap.actionTriggered += context => { onAnyActionTriggered?.Invoke(context); };
             }
         }
     }
 
-    public class DebugActionMap : BetterActionMap
+    public class DebugInputActions : BetterActionMap
     {
-        public DebugActionMap(InputActionMap actionMap)
+        public DebugInputActions(InputActionMap actionMap)
         {
             ActionMap = actionMap;
             ElementId = Uid.Invalid;
         }
     }
 
-    public class Map : BetterActionMap
+    public class abcMap : BetterActionMap
     {
         public BetterInputActionsData BetterInputActionsData { get; }
-        public Map(BetterInputActionsData actionsData)
+        public abcMap(BetterInputActionsData actionsData)
         {
             BetterInputActionsData = actionsData;
             ActionMap = actionsData.ActionMap;

@@ -25,6 +25,7 @@ namespace BetterInputSystem.Editor
     {
         private SerializedObject m_betterInputActionsSO;
 
+        private PropertyField m_uiActionMapAssetPropertyField;
         private PropertyField m_debugActionMapPropertyField;
         private Button m_generateCodeButton;
 
@@ -35,6 +36,9 @@ namespace BetterInputSystem.Editor
 
         private void CreateLayout()
         {
+            m_uiActionMapAssetPropertyField = new PropertyField();
+            Add(m_uiActionMapAssetPropertyField);
+            
             m_debugActionMapPropertyField = new PropertyField();
             m_debugActionMapPropertyField.style.paddingBottom = 8;
             Add(m_debugActionMapPropertyField);
@@ -52,6 +56,9 @@ namespace BetterInputSystem.Editor
         public void SetBetterInputActions(DataCollectionWorkflow workflow)
         {
             m_betterInputActionsSO = workflow.DataCollectionSO;
+
+            m_uiActionMapAssetPropertyField.BindProperty(
+                m_betterInputActionsSO.FindProperty(BetterInputActions.UIActionMapAsset_VarName));
 
             m_debugActionMapPropertyField.BindProperty(
                 m_betterInputActionsSO.FindProperty(BetterInputActions.DebugActionMap_VarName));
