@@ -2,7 +2,7 @@
   "name": "com.hspp.betterinput",
   "displayName": "BetterInput",
   "version": "1.0.0",
-  "unity": "6000.0",
+  "unity": "6000.4",
   "description": "Input System action maps stored in Datastores and referenced by Uid, with a UI mode switch, device type detection and generated typed access.",
   "keywords": [
     "unity",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "com.unity.inputsystem": "1.19.0",
-    "com.hspp.datastores": "1.0.1",
-    "com.hspp.systemcore": "1.0.0"
+    "com.hspp.datastores": "1.0.2",
+    "com.hspp.systemcore": "1.0.2"
   }
 }
