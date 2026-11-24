@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using DatastoresDX.Runtime;
+using DatastoresDX.Runtime.DataCollections;
 using SystemCoreSystem;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -17,115 +17,208 @@ namespace BetterInputSystem.Runtime
         KeyboardAndMouse,
         Gamepad, // One day expand to support specific like xbox and ps5
     }
-    
+
     public class BetterInput : AKeySystem
     {
-        private static string PREFAB_PATH = "BetterInput/BetterInput";
+        public const string UI_MAP_NAME = "UI";
+        public const string DEBUG_MAP_NAME = "Debug";
 
+        private readonly Dictionary<Uid, BetterActionMap> m_maps = new();
+        private bool m_isUIMode;
+
+        /// <summary>Runtime asset holding the UI, debug and every gameplay map, copied from the data at startup.</summary>
+        public InputActionAsset Asset { get; private set; }
+        public InputActionMap UIMap { get; private set; }
+        public InputActionMap DebugMap { get; private set; }
         public EventSystem EventSystem { get; private set; }
-        public InputSystemUIInputModule InputSystemUIInputModule { get; private set; }
+        public InputSystemUIInputModule UIInputModule { get; private set; }
 
-        public BetterInputActions BetterInputActions { get; private set; }
-        public ABetterInputActionsController InputActionsController { get; private set; }
-        private Action OnAnyInputActionEnabledChanged;
-
-        public InputDeviceType CurrentInputDeviceType { get; private set; } = InputDeviceType.KeyboardAndMouse;
-        public Action<InputDeviceType> OnInputDeviceTypeChanged;
+        public InputDeviceType CurrentDeviceType { get; private set; } = InputDeviceType.KeyboardAndMouse;
+        public event Action<InputDeviceType> DeviceTypeChanged;
 
         public override Task OnInitialize()
         {
-            // UserInput instance
-            GameObject prefab = Resources.Load<GameObject>(PREFAB_PATH);
-            if (prefab == null)
+            List<BetterInputActions> collections = Datastores.GetDataCollectionsOfType<BetterInputActions>();
+            if (collections.Count != 1)
             {
-                Debug.LogError($"Failed to load UserInput prefab.");
-                return Task.CompletedTask;
-            }
-            GameObject instance = Instantiate(prefab, transform);
-            
-            EventSystem = instance.GetComponent<EventSystem>();
-            InputSystemUIInputModule = instance.GetComponent<InputSystemUIInputModule>();
-            
-            // Input Actions
-            BetterInputActions = Datastores.GetDataCollectionsOfType<BetterInputActions>().FirstOrDefault();
-            if (BetterInputActions == null)
-            {
+                Debug.LogError($"BetterInput needs exactly one Better Input data collection but found {collections.Count}. Input is disabled.");
                 return Task.CompletedTask;
             }
 
-            InputActionsController = CreateBetterInputActionsController();
-            InputActionsController.Initialize(BetterInputActions, OnAnyActionTriggered, () => { OnAnyInputActionEnabledChanged?.Invoke(); });
+            BuildAsset(collections[0]);
+            CreateEventSystem();
 
-            BetterInputActions.Initialize(OnAnyActionTriggered); // TODO: REMOVE THIS
-            
-            InputSystemUIInputModule.actionsAsset = BetterInputActions.UIInputActionMap.asset;
+            // Until SetUIMode is first called, the UI map and any requested gameplay maps are both live.
+            UIMap.Enable();
+            DebugMap.Enable();
+
+            InputSystem.onActionChange += OnActionChange;
             return Task.CompletedTask;
         }
 
-        private ABetterInputActionsController CreateBetterInputActionsController()
+        public override Task OnDeinitialize()
         {
-            List<Type> types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes())
-                .Where(type => type.IsSubclassOf(typeof(ABetterInputActionsController)) && !type.IsAbstract).ToList();
-            if (types.Count == 0)
+            InputSystem.onActionChange -= OnActionChange;
+            if (EventSystem != null)
             {
-                Debug.LogError("Could not find BetterInputActionsController implementation! Make sure to click the Generate Code button!");
-                return null;
+                Destroy(EventSystem.gameObject);
+            }
+            if (Asset != null)
+            {
+                Asset.Disable();
+                Destroy(Asset);
             }
 
-            return (ABetterInputActionsController)Activator.CreateInstance(types[0]);
+            m_maps.Clear();
+            m_isUIMode = false;
+            Asset = null;
+            UIMap = null;
+            DebugMap = null;
+            EventSystem = null;
+            UIInputModule = null;
+            return Task.CompletedTask;
         }
 
-        public void EnableUIInputActions()
+        /// <summary>Returns the gameplay map with this Uid, or null if there isn't one.</summary>
+        public BetterActionMap GetMap(Uid id)
         {
-            BetterInputActions.UIActions.Enable();
-            AllowInputActionsToBeEnabled(false);
+            return m_maps.TryGetValue(id, out BetterActionMap map) ? map : null;
         }
 
-        public void EnableGameInputActions()
+        /// <summary>
+        /// UI mode turns the UI map on and holds every gameplay map off. Leaving it turns the UI map off and lets each
+        /// gameplay map return to whatever it was last asked for. The debug map is never affected.
+        /// </summary>
+        public void SetUIMode(bool isUIMode)
         {
-            BetterInputActions.UIActions.Disable();
-            AllowInputActionsToBeEnabled(true);
-        }
-
-        public void EnableActionMap(Uid actionMapId, bool enable)
-        {
-            InputActionsController.EnableActionMap(actionMapId, enable);
-        }
-        
-        private void AllowInputActionsToBeEnabled(bool isAllowed)
-        {
-            InputActionsController.AllowInputActionsToBeEnabled(isAllowed);
-        }
-
-        private void OnAnyActionTriggered(InputAction.CallbackContext context)
-        {
-            if (!context.performed && !context.started)
+            if (Asset == null)
             {
                 return;
             }
-            
-            Debug.Log($"{context.control.device.name}::{context.action.name}");
-            
-            InputDeviceType type = GetDeviceType(context.control.device);
-            if (type != CurrentInputDeviceType)
+
+            m_isUIMode = isUIMode;
+            if (isUIMode)
             {
-                CurrentInputDeviceType = type;
-                OnInputDeviceTypeChanged?.Invoke(type);
+                UIMap.Enable();
+            }
+            else
+            {
+                UIMap.Disable();
+            }
+
+            foreach (BetterActionMap map in m_maps.Values)
+            {
+                ApplyGate(map);
             }
         }
 
-        private InputDeviceType GetDeviceType(InputDevice inputDevice)
+        internal void ApplyGate(BetterActionMap map)
         {
-            switch (inputDevice.name)
+            if (map.IsRequested && !m_isUIMode)
             {
-                case "Keyboard":
-                case "Mouse":
-                    return InputDeviceType.KeyboardAndMouse;
-                case "Gamepad":
-                    return InputDeviceType.Gamepad;
-                default:
-                    return InputDeviceType.Unknown;
+                map.Actions.Enable();
             }
+            else
+            {
+                map.Actions.Disable();
+            }
+        }
+
+        private void BuildAsset(BetterInputActions data)
+        {
+            Asset = ScriptableObject.CreateInstance<InputActionAsset>();
+            Asset.name = data.name;
+            UIMap = AddMap(data.UIMap, UI_MAP_NAME, Uid.Invalid);
+            DebugMap = AddMap(data.DebugMap, DEBUG_MAP_NAME, Uid.Invalid);
+
+            foreach (DataCollectionElement element in data.GetAllElements())
+            {
+                if (element is BetterInputActionsData mapData)
+                {
+                    InputActionMap actions = AddMap(mapData.ActionMap, mapData.DisplayName, mapData.Id);
+                    m_maps.Add(mapData.Id, new BetterActionMap(this, mapData.Id, actions));
+                }
+            }
+        }
+
+        // Copies a map from the data into the runtime asset, so the data asset is never touched at runtime.
+        // Binding IDs are kept, so saved rebinds still line up with the data.
+        private InputActionMap AddMap(InputActionMap source, string name, Uid id)
+        {
+            if (string.IsNullOrEmpty(name) || Asset.FindActionMap(name) != null)
+            {
+                name = string.IsNullOrEmpty(name) ? id.ToString() : $"{name} ({id})";
+            }
+
+            InputActionMap map = Asset.AddActionMap(name);
+            if (source == null)
+            {
+                return map;
+            }
+
+            foreach (InputAction action in source.actions)
+            {
+                InputAction copy = map.AddAction(action.name, action.type, interactions: action.interactions,
+                    processors: action.processors, expectedControlLayout: action.expectedControlType);
+                copy.wantsInitialStateCheck = action.wantsInitialStateCheck;
+            }
+            foreach (InputBinding binding in source.bindings)
+            {
+                map.AddBinding(binding);
+            }
+            return map;
+        }
+
+        private void CreateEventSystem()
+        {
+            // Built inactive so the UI module's OnEnable finds our actions instead of assigning its own defaults.
+            GameObject eventSystemObject = new GameObject("EventSystem");
+            eventSystemObject.SetActive(false);
+            eventSystemObject.transform.SetParent(transform, false);
+
+            EventSystem = eventSystemObject.AddComponent<EventSystem>();
+            UIInputModule = eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            UIInputModule.actionsAsset = Asset;
+            UIInputModule.point = UIAction("Point");
+            UIInputModule.move = UIAction("Navigate");
+            UIInputModule.submit = UIAction("Submit");
+            UIInputModule.cancel = UIAction("Cancel");
+            UIInputModule.leftClick = UIAction("Click");
+            UIInputModule.middleClick = UIAction("MiddleClick");
+            UIInputModule.rightClick = UIAction("RightClick");
+            UIInputModule.scrollWheel = UIAction("ScrollWheel");
+            UIInputModule.trackedDevicePosition = UIAction("TrackedDevicePosition");
+            UIInputModule.trackedDeviceOrientation = UIAction("TrackedDeviceOrientation");
+
+            eventSystemObject.SetActive(true);
+        }
+
+        private InputActionReference UIAction(string actionName)
+        {
+            InputAction action = UIMap.FindAction(actionName);
+            return action != null ? InputActionReference.Create(action) : null;
+        }
+
+        private void OnActionChange(object actionOrMap, InputActionChange change)
+        {
+            if (change != InputActionChange.ActionStarted && change != InputActionChange.ActionPerformed)
+            {
+                return;
+            }
+
+            InputDeviceType type = (actionOrMap as InputAction)?.activeControl?.device switch
+            {
+                Gamepad => InputDeviceType.Gamepad,
+                Keyboard or Mouse => InputDeviceType.KeyboardAndMouse,
+                _ => InputDeviceType.Unknown,
+            };
+            if (type == InputDeviceType.Unknown || type == CurrentDeviceType)
+            {
+                return;
+            }
+
+            CurrentDeviceType = type;
+            DeviceTypeChanged?.Invoke(type);
         }
     }
 }

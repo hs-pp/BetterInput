@@ -1,47 +1,36 @@
-using System;
 using DatastoresDX.Runtime;
 using UnityEngine.InputSystem;
 
 namespace BetterInputSystem.Runtime
 {
-    public abstract class BetterActionMap
+    /// <summary>
+    /// A gameplay action map, looked up by its Datastores Uid. Enabling it records a request; the map only runs
+    /// while BetterInput is not in UI mode.
+    /// </summary>
+    public sealed class BetterActionMap
     {
-        public Uid ElementId { get; protected set; }
-        public InputActionMap ActionMap { get; protected set; }
-        public Action OnEnableChanged;
-        
-        private bool m_isEnabled = false;
-        private bool m_isAllowedToBeEnabled = true;
- 
-        public bool IsEnabled => ActionMap.enabled;
-        public bool IsAllowedToBeEnabled
+        private readonly BetterInput m_owner;
+
+        public Uid Id { get; }
+        public InputActionMap Actions { get; }
+
+        /// <summary>What game code last asked for.</summary>
+        public bool IsRequested { get; private set; }
+
+        /// <summary>Whether the map is actually running, after the UI mode gate.</summary>
+        public bool IsEnabled => Actions.enabled;
+
+        internal BetterActionMap(BetterInput owner, Uid id, InputActionMap actions)
         {
-            get => m_isAllowedToBeEnabled;
-            set
-            {
-                m_isAllowedToBeEnabled = value;
-                Enable(m_isEnabled);
-            }
+            m_owner = owner;
+            Id = id;
+            Actions = actions;
         }
 
-        public void Enable(bool enabled)
+        public void Enable(bool enable)
         {
-            bool wasEnabled = IsEnabled;
-            
-            m_isEnabled = enabled;
-            if (m_isAllowedToBeEnabled && m_isEnabled)
-            {
-                ActionMap.Enable();
-            }
-            else
-            {
-                ActionMap.Disable();   
-            }
-
-            if (wasEnabled != IsEnabled)
-            {
-                OnEnableChanged?.Invoke();
-            }
+            IsRequested = enable;
+            m_owner.ApplyGate(this);
         }
     }
 }

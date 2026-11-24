@@ -10,58 +10,46 @@ namespace BetterInputSystem.Editor
     [OverviewPanel(typeof(BetterInputActions))]
     public class BetterInputActionsOverviewPanel : AOverviewPanel
     {
+        private PropertyField m_uiMapField;
+        private PropertyField m_debugMapField;
+        private SerializedObject m_collectionSO;
+
         protected override VisualElement CreatePanel()
         {
-            return new BetterInputActionsOverviewElement();
+            VisualElement root = new VisualElement();
+
+            m_uiMapField = new PropertyField { label = "UI Map" };
+            root.Add(m_uiMapField);
+
+            root.Add(new Button(ResetUIMap) { text = "Reset UI Map to Defaults" });
+
+            m_debugMapField = new PropertyField { label = "Debug Map" };
+            root.Add(m_debugMapField);
+
+            return root;
         }
 
         protected override void OnSetWorkflow(AWorkflow workflow)
         {
-            (m_panel as BetterInputActionsOverviewElement).SetBetterInputActions(workflow as DataCollectionWorkflow);
-        }
-    }
-
-    public class BetterInputActionsOverviewElement : VisualElement
-    {
-        private SerializedObject m_betterInputActionsSO;
-
-        private PropertyField m_uiActionMapAssetPropertyField;
-        private PropertyField m_debugActionMapPropertyField;
-        private Button m_generateCodeButton;
-
-        public BetterInputActionsOverviewElement()
-        {
-            CreateLayout();
+            m_collectionSO = (workflow as DataCollectionWorkflow).DataCollectionSO;
+            m_uiMapField.BindProperty(m_collectionSO.FindProperty(BetterInputActions.UIMap_VarName));
+            m_debugMapField.BindProperty(m_collectionSO.FindProperty(BetterInputActions.DebugMap_VarName));
         }
 
-        private void CreateLayout()
+        private void ResetUIMap()
         {
-            m_uiActionMapAssetPropertyField = new PropertyField();
-            Add(m_uiActionMapAssetPropertyField);
-            
-            m_debugActionMapPropertyField = new PropertyField();
-            m_debugActionMapPropertyField.style.paddingBottom = 8;
-            Add(m_debugActionMapPropertyField);
-            
-            m_generateCodeButton = new Button();
-            m_generateCodeButton.text = "Regenerate Code";
-            Add(m_generateCodeButton);
-
-            m_generateCodeButton.clicked += () =>
+            if (m_collectionSO?.targetObject is not BetterInputActions collection ||
+                !EditorUtility.DisplayDialog("Reset UI Map?",
+                    "Replace the UI map with the Input System's default UI actions? You can undo this.", "Reset", "Cancel"))
             {
-                BetterInputActionsSourceGenerator.GenerateAndSaveCode();
-            };
-        }
-        
-        public void SetBetterInputActions(DataCollectionWorkflow workflow)
-        {
-            m_betterInputActionsSO = workflow.DataCollectionSO;
+                return;
+            }
 
-            m_uiActionMapAssetPropertyField.BindProperty(
-                m_betterInputActionsSO.FindProperty(BetterInputActions.UIActionMapAsset_VarName));
-
-            m_debugActionMapPropertyField.BindProperty(
-                m_betterInputActionsSO.FindProperty(BetterInputActions.DebugActionMap_VarName));
+            // Marked dirty like any other edit here; code regenerates when the collection is saved.
+            Undo.RecordObject(collection, "Reset UI Map to Defaults");
+            collection.ResetUIMapToDefaults();
+            EditorUtility.SetDirty(collection);
+            m_collectionSO.Update();
         }
     }
 }
