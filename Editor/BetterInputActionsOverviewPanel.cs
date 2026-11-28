@@ -7,6 +7,7 @@ using UnityEngine.UIElements;
 
 namespace BetterInputSystem.Editor
 {
+    [System.Serializable]
     [OverviewPanel(typeof(BetterInputActions))]
     public class BetterInputActionsOverviewPanel : AOverviewPanel
     {
